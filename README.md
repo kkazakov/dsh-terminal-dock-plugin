@@ -111,14 +111,18 @@ Deliberately conservative so it keeps working across Harness releases:
 ## Development
 
 ```bash
-node build.mjs   # regenerate client.terminal.js from src/ + vendor/
-node --check client.js && node --check client.terminal.js
+node build.mjs        # regenerate client.terminal.js from src/ + vendor/
+node test-plugin.mjs  # load both halves the way the loader does, with stubs
 ```
 
 `client.terminal.js` is generated: vendored
 [@xterm/xterm](https://github.com/xtermjs/xterm.js) 6.0.0 and
 `@xterm/addon-fit` 0.11.0 (both MIT) plus `src/terminal-screen.js`. `vendor/`
 holds those unmodified downloads; `prepack` rebuilds the chunk before publishing.
+
+`test-plugin.mjs` (excluded from the published package) checks the manifest, the
+`cordis.patch.yml` row name, the slot registrations, the window-hold union and
+the lazy chunk's owner id — it needs no Harness installation and no browser.
 
 Checking what would be published:
 

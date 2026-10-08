@@ -28,6 +28,7 @@
   },
   "scripts": {
     "build": "node build.mjs",
+    "test": "node test-plugin.mjs",
     "prepack": "node build.mjs"
   },
   "exports": {
