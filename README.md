@@ -12,13 +12,16 @@ opens an interactive shell panel at the bottom of the conversation.
 |---|---|
 | **Icon** | A terminal glyph at the right-hand end of the composer's dock row, directly above the text input box. Click to open or close; pressed state is visible. |
 | **Panel** | Grows upward from the composer, inside the conversation column — the left menu and the right sidebar keep their full height and are never covered. |
-| **Header** | Title, **New terminal** (respawns after an exit or a reclaimed shell) and a close button; the top edge drags to resize within 120 px – 70 % of the window. |
-| **Persistence** | Open/closed state and panel height are remembered per browser; the terminal reattaches to the same shell after a reload. Closing hides the panel — the shell keeps running and the screen buffer is kept. |
-| **Multi-session** | One terminal per session, created on first open, so switching conversations never kills a running command. |
+| **Header** | Title, **New terminal** and a close button; the top edge drags to resize within 120 px – 70 % of the window. |
+| **Auto-recovery** | A shell that is gone — reclaimed while the panel was closed, exited on its own, or failed to start — is respawned automatically while the panel is open, with no click. A 1.5 s cooldown and a three-attempt cap keep a shell that dies on startup from looping; five seconds of a running shell clear the count, and after the cap the **New terminal** button takes over. |
+| **Per-session state** | Open/closed is remembered **per session**, and a session you have never opened starts closed. Panel height is a browser-wide preference. |
+| **Multi-session** | One terminal per session, created on first open, so switching conversations never kills a running command — and never shows another session's terminal. |
+| **Persistence** | The terminal reattaches to the same shell after a reload; closing only hides the panel, so the shell keeps running and its screen buffer is kept. |
 | **Localized** | English and Bulgarian copy. |
 
-If the shell exits, the panel reports the exit code and offers **New terminal**;
-if a long idled terminal was reclaimed by the Host, it offers the same.
+A shell that exits still reports its exit code in the panel's status line until
+the respawn replaces it; if respawning is exhausted, the status stays with the
+**New terminal** button next to it.
 
 ## Requirements
 
@@ -82,6 +85,14 @@ The plugin has no `config` row of its own: the Host half is a no-op.
   session: the same PTY ownership, shell discovery, screen recovery, idle
   reclamation and process lifetime as the shipped right-sidebar terminal. Only
   the placement differs.
+- Each session keeps its own view and its own open flag
+  (`dsh.terminal-dock.open.v2.<sessionId>` in `localStorage`), and the panel is
+  tagged with the session it was built for, so a session switch can neither show
+  nor respawn another session's shell.
+- When the controller reports a session's shell as missing, exited or failed
+  while the panel is open, the screen respawns it through the same close-then-
+  create path as the **New terminal** button, pacing the attempts so a shell
+  that dies immediately cannot loop.
 - xterm.js is vendored into a package-local lazy chunk (`client.terminal.js`),
   loaded through `require.async('./client.terminal.js')` the first time the
   panel opens, so the emulator costs nothing until you use it.

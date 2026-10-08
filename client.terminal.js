@@ -46,6 +46,12 @@ if (typeof document !== 'undefined' && document.querySelector(`style[data-plugin
   document.head.appendChild(tag);
 }
 
+/** Auto-recovery pacing: at most one respawn per cooldown, a few in a row. */
+const AUTO_RESTART_COOLDOWN_MS = 1500;
+const AUTO_RESTART_LIMIT = 3;
+/** A shell that stays running this long clears the consecutive-respawn count. */
+const AUTO_RESTART_STABLE_MS = 5000;
+
 /**
  * Subscribe to a snapshot store (or to nothing, when the source is absent).
  * @param store - a `{ getSnapshot, subscribe }` source, or null.
@@ -203,6 +209,33 @@ function TerminalScreen({ view, visible, t, theme, onRestart }) {
   const missing = issue === 'missingTerminal';
   const readOnly = state.phase === 'connected' && state.info?.state === 'running' && !state.writable;
   const retry = !ended && !missing && (state.phase === 'failed' || state.phase === 'disconnected');
+  /**
+   * A shell that is gone for good: reclaimed while the panel was closed, exited
+   * on its own, or failed to start. All three are respawned without a click
+   * while the panel is open.
+   */
+  const dead = missing || ended || state.info?.state === 'failed';
+
+  const recovery = React.useRef({ at: 0, strikes: 0 });
+  React.useEffect(() => {
+    if (!visible || !dead) return;
+    const now = Date.now();
+    if (now - recovery.current.at < AUTO_RESTART_COOLDOWN_MS) return;
+    if (recovery.current.strikes >= AUTO_RESTART_LIMIT) return;
+    recovery.current.at = now;
+    recovery.current.strikes += 1;
+    onRestart();
+  }, [visible, dead, onRestart]);
+
+  // A shell that keeps running is a healthy one: forget the failed attempts.
+  React.useEffect(() => {
+    if (state.phase !== 'connected' || state.info?.state !== 'running') return undefined;
+    const timer = setTimeout(() => {
+      recovery.current.strikes = 0;
+    }, AUTO_RESTART_STABLE_MS);
+    return () => clearTimeout(timer);
+  }, [state.phase, state.info?.state, state.info?.id]);
+
   let status;
   if (state.phase === 'idle' || state.phase === 'loading') status = t('loading');
   else if (state.phase === 'creating' || state.phase === 'connecting' || state.phase === 'disconnected') status = t(state.phase);
@@ -226,7 +259,7 @@ function TerminalScreen({ view, visible, t, theme, onRestart }) {
           readOnly ? h('span', { className: 'tdock-status-text' }, t('readonly')) : null,
           readOnly ? button(t('control'), () => view.connect()) : null,
           retry ? button(state.info === undefined ? t('retry') : t('reconnect'), () => (state.info === undefined ? view.refresh() : view.connect())) : null,
-          ended || missing ? button(t('newTerminal'), onRestart) : null,
+          ended || dead ? button(t('newTerminal'), onRestart) : null,
         )
       : null,
     state.info !== undefined ? h(Screen, { state, view, visible, theme, themeValue }) : null,

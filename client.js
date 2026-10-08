@@ -24,8 +24,8 @@ window.__ModuleLoader__.load({
 
     /** Client locale namespace owned by this bundle. */
     const NS = 'terminal-dock';
-    /** Panel state keys; both survive a reload. */
-    const OPEN_KEY = 'dsh.terminal-dock.open.v1';
+    /** Panel state keys; both survive a reload. The open flag is per Session. */
+    const OPEN_KEY = 'dsh.terminal-dock.open.v2';
     const HEIGHT_KEY = 'dsh.terminal-dock.height.v1';
     /**
      * Content identity of this panel's terminal. It is the persistence key the
@@ -136,40 +136,62 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * The open flag shared by the icon row and the panel; both slot entries are
-     * separate components, so the flag lives here rather than in React state.
+     * The open flag, per Session, shared by the icon row and the panel; both
+     * slot entries are separate components, so the flag lives here rather than
+     * in React state. A Session with no stored flag starts closed.
      */
     const openState = {
-      open: readPreference(OPEN_KEY) === '1',
+      bySession: new Map(),
       listeners: new Set(),
     };
 
     /**
-     * Subscribe a component to the shared open flag.
-     * @returns whether the panel is open.
+     * Read a Session's open flag, falling back to its stored value and then to
+     * closed — a new Session never inherits another Session's panel.
+     * @param sessionId - owning Session.
+     * @returns whether the panel is open in that Session.
      */
-    function useOpen() {
-      const [open, setOpen] = React.useState(openState.open);
+    function readOpen(sessionId) {
+      if (sessionId === undefined || sessionId === null) return false;
+      const known = openState.bySession.get(sessionId);
+      if (known !== undefined) return known;
+      const stored = readPreference(`${OPEN_KEY}.${sessionId}`) === '1';
+      openState.bySession.set(sessionId, stored);
+      return stored;
+    }
+
+    /**
+     * Subscribe a component to its Session's open flag.
+     * @param sessionId - owning Session.
+     * @returns whether the panel is open in that Session.
+     */
+    function useOpen(sessionId) {
+      const [open, setLocal] = React.useState(() => readOpen(sessionId));
       React.useEffect(() => {
-        const listener = () => setOpen(openState.open);
+        if (sessionId === undefined || sessionId === null) return undefined;
+        setLocal(readOpen(sessionId));
+        const listener = (changed) => {
+          if (changed === sessionId) setLocal(readOpen(sessionId));
+        };
         openState.listeners.add(listener);
-        listener();
         return () => {
           openState.listeners.delete(listener);
         };
-      }, []);
+      }, [sessionId]);
       return open;
     }
 
     /**
-     * Set the shared open flag and persist it.
+     * Set one Session's open flag and persist it under that Session's key.
+     * @param sessionId - owning Session.
      * @param next - the new flag.
      */
-    function setOpen(next) {
-      if (openState.open === next) return;
-      openState.open = next;
-      writePreference(OPEN_KEY, next ? '1' : '0');
-      for (const listener of [...openState.listeners]) listener();
+    function setOpen(sessionId, next) {
+      if (sessionId === undefined || sessionId === null) return;
+      if (readOpen(sessionId) === next) return;
+      openState.bySession.set(sessionId, next);
+      writePreference(`${OPEN_KEY}.${sessionId}`, next ? '1' : '0');
+      for (const listener of [...openState.listeners]) listener(sessionId);
     }
 
     /**
@@ -312,7 +334,7 @@ window.__ModuleLoader__.load({
      * @returns the toggle row, or null when no Session is bound yet.
      */
     function TerminalToggle({ sessionId }) {
-      const open = useOpen();
+      const open = useOpen(sessionId);
       if (sessionId === undefined || sessionId === null) return null;
       return h(
         'div',
@@ -327,7 +349,7 @@ window.__ModuleLoader__.load({
             'aria-pressed': open,
             'aria-label': open ? t('collapse') : t('expand'),
             title: open ? t('collapse') : t('expand'),
-            onClick: () => setOpen(!open),
+            onClick: () => setOpen(sessionId, !open),
           },
           h(TerminalIcon, { size: 16 }),
         ),
@@ -340,8 +362,14 @@ window.__ModuleLoader__.load({
      * @returns the panel, or null before it has ever been opened in this Session.
      */
     function TerminalPanel({ sessionId }) {
-      const open = useOpen();
-      const [view, setView] = React.useState(null);
+      const open = useOpen(sessionId);
+      /**
+       * The Session's view, tagged with the Session it belongs to: a render that
+       * no longer matches the current Session reads as "no view yet" instead of
+       * briefly drawing the previous Session's terminal.
+       */
+      const [created, setCreated] = React.useState({ sessionId: null, view: null });
+      const view = created.sessionId === sessionId ? created.view : null;
       const [height, setHeight] = React.useState(() => {
         const stored = Number.parseInt(readPreference(HEIGHT_KEY) ?? '', 10);
         return Number.isFinite(stored) && stored >= MIN_HEIGHT ? stored : DEFAULT_HEIGHT;
@@ -367,7 +395,7 @@ window.__ModuleLoader__.load({
       React.useEffect(() => {
         if (!open || sessionId === undefined || sessionId === null) return;
         try {
-          setView(ensureView(sessionId));
+          setCreated({ sessionId, view: ensureView(sessionId) });
         } catch (error) {
           console.error('terminal-dock: could not open a terminal', error);
         }
@@ -396,10 +424,14 @@ window.__ModuleLoader__.load({
         window.addEventListener('pointercancel', stop);
       };
 
-      const restart = () => {
+      /**
+       * Respawn this Session's shell. The header button calls it, and the
+       * screen calls it on its own when a shell is missing, exited or failed.
+       */
+      const restart = React.useCallback(() => {
         if (sessionId === undefined || sessionId === null) return;
-        setView(restartView(sessionId));
-      };
+        setCreated({ sessionId, view: restartView(sessionId) });
+      }, [sessionId]);
 
       if (view === null) return null;
       return h(
@@ -421,7 +453,7 @@ window.__ModuleLoader__.load({
           h('button', { type: 'button', className: 'tdock-button', onClick: restart }, t('newTerminal')),
           h(
             'button',
-            { type: 'button', className: 'tdock-close', onClick: () => setOpen(false), 'aria-label': t('close'), title: t('close') },
+            { type: 'button', className: 'tdock-close', onClick: () => setOpen(sessionId, false), 'aria-label': t('close'), title: t('close') },
             h(CloseIcon, null),
           ),
         ),
@@ -433,7 +465,7 @@ window.__ModuleLoader__.load({
             : h(
                 React.Suspense,
                 { fallback: h('div', { className: 'tdock-empty' }, t('loading')) },
-                h(Screen, { view, visible: open, t, theme: themeSource, onRestart: restart }),
+                h(Screen, { key: sessionId, view, visible: open, t, theme: themeSource, onRestart: restart }),
               ),
         ),
       );

@@ -1,6 +1,6 @@
 {
   "name": "@wasp/dsh-terminal-dock",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "description": "Terminal dock for DeepSeek Harness: a terminal icon above the text input box opens an interactive shell panel at the bottom of the conversation.",
   "license": "MIT",

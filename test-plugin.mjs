@@ -139,5 +139,15 @@ const chunkModule = chunk.factory((specifier) => {
 check('chunk exports TerminalScreen', typeof chunkModule.TerminalScreen === 'function');
 check('chunk carries the emulator stylesheet', read('./client.terminal.js').includes('xterm-viewport'));
 
+// ── behaviour guards ────────────────────────────────────────────────────────
+
+const entrySource = read('./client.js');
+const chunkSource = read('./client.terminal.js');
+check('open state is stored under a per-Session key', entrySource.includes('${OPEN_KEY}.${sessionId}'));
+check('a Session with no stored flag starts closed', entrySource.includes("readPreference(`${OPEN_KEY}.${sessionId}`) === '1'"));
+check('the panel drops a view that belongs to another Session', entrySource.includes('created.sessionId === sessionId'));
+check('the toggle and the close button act on the current Session', entrySource.includes('setOpen(sessionId, !open)') && entrySource.includes('setOpen(sessionId, false)'));
+check('the screen respawns a dead shell by itself', chunkSource.includes('AUTO_RESTART_LIMIT') && chunkSource.includes('onRestart();'));
+
 console.log(`\n${checks - failures}/${checks} checks passed`);
 process.exit(failures === 0 ? 0 : 1);
