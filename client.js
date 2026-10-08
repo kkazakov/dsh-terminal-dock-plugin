@@ -166,19 +166,21 @@ window.__ModuleLoader__.load({
      * @returns whether the panel is open in that Session.
      */
     function useOpen(sessionId) {
-      const [open, setLocal] = React.useState(() => readOpen(sessionId));
+      const [known, setKnown] = React.useState(() => ({ sessionId, open: readOpen(sessionId) }));
       React.useEffect(() => {
         if (sessionId === undefined || sessionId === null) return undefined;
-        setLocal(readOpen(sessionId));
+        setKnown({ sessionId, open: readOpen(sessionId) });
         const listener = (changed) => {
-          if (changed === sessionId) setLocal(readOpen(sessionId));
+          if (changed === sessionId) setKnown({ sessionId, open: readOpen(sessionId) });
         };
         openState.listeners.add(listener);
         return () => {
           openState.listeners.delete(listener);
         };
       }, [sessionId]);
-      return open;
+      // A render that no longer matches the current Session reads the store
+      // directly, so the previous Session's flag is never shown for a frame.
+      return known.sessionId === sessionId ? known.open : readOpen(sessionId);
     }
 
     /**
