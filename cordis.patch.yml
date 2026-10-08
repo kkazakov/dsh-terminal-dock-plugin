@@ -1,0 +1,7 @@
+# Terminal Dock bundle.
+# The Host half is empty: the panel reuses the shipped terminal controller
+# (`@deepseek-ai/dsh-api-terminal-controller`, mounted by the web-app bundle)
+# for PTY ownership, shell discovery, screen recovery and process lifetime.
+- insert:
+    - id: terminal-dock
+      name: '@wasp/dsh-terminal-dock'

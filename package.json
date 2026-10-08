@@ -1,0 +1,59 @@
+{
+  "name": "@wasp/dsh-terminal-dock",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Terminal dock for DeepSeek Harness: a terminal icon above the text input box opens an interactive shell panel at the bottom of the conversation.",
+  "license": "MIT",
+  "author": "Krasimir Kazakov",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kkazakov/dsh-terminal-dock-plugin.git"
+  },
+  "homepage": "https://github.com/kkazakov/dsh-terminal-dock-plugin#readme",
+  "bugs": {
+    "url": "https://github.com/kkazakov/dsh-terminal-dock-plugin/issues"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "dsh",
+    "terminal",
+    "shell",
+    "pty",
+    "xterm",
+    "composer"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "prepack": "node build.mjs"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "client.terminal.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg"
+  ],
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-theme",
+        "@deepseek-ai/dsh-api-terminal-controller"
+      ]
+    }
+  }
+}

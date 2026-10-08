@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Terminal Dock",
+    "description": "Adds a terminal icon above the text input box that opens an interactive shell panel at the bottom of the conversation, running the session workspace shell."
+  }
+}
